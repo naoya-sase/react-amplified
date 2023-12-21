@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-
 import { generateClient } from 'aws-amplify/api';
-
-import { Button, Heading, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
 import { AuthUser } from 'aws-amplify/auth';
-import '@aws-amplify/ui-react/styles.css';
+import { Button, ButtonGroup, ColorMode, Flex, Heading, Icon, Table, TableBody, TableCell, TableHead, TableRow, TextField, ThemeProvider, ToggleButton, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
 
 import { createTodo } from './graphql/mutations';
 import { listTodos } from './graphql/queries';
 import { type CreateTodoInput, type Todo } from './API';
+import theme from './theme';
+import { DarkMode, LightMode } from '@mui/icons-material';
+import './App.css';
 
 const initialState: CreateTodoInput = { name: '', description: '' };
 const client = generateClient();
@@ -19,6 +19,7 @@ type AppProps = {
 };
 
 const App: React.FC<AppProps> = ({ signOut, user }) => {
+  const [colorMode, setColorMode] = useState<ColorMode>('dark');
   const [formState, setFormState] = useState<CreateTodoInput>(initialState);
   const [todos, setTodos] = useState<Todo[] | CreateTodoInput[]>([]);
 
@@ -55,66 +56,81 @@ const App: React.FC<AppProps> = ({ signOut, user }) => {
     }
   }
 
+  /** テーマを切り替える */
+  function handleChangeTheme(mode: ColorMode) {
+    setColorMode(mode);
+  }
+
   return (
-    <div style={styles.container}>
-      <Heading level={1}>Hello {user?.username}</Heading>
-      <Button onClick={signOut}>Sign out</Button>
-      <h2>Amplify Todos</h2>
-      <input
-        onChange={(event) =>
-          setFormState({ ...formState, name: event.target.value })
-        }
-        style={styles.input}
-        value={formState.name}
-        placeholder="Name"
-      />
-      <input
-        onChange={(event) =>
-          setFormState({ ...formState, description: event.target.value })
-        }
-        style={styles.input}
-        value={formState.description as string}
-        placeholder="Description"
-      />
-      <button style={styles.button} onClick={addTodo}>
-        Create Todo
-      </button>
-      {todos.map((todo, index) => (
-        <div key={todo.id ? todo.id : index} style={styles.todo}>
-          <p style={styles.todoName}>{todo.name}</p>
-          <p style={styles.todoDescription}>{todo.description}</p>
-        </div>
-      ))}
-    </div>
+    <ThemeProvider theme={theme} colorMode={colorMode}>
+      <Flex direction='column' gap="20px" style={style.view}>
+        <ButtonGroup justifyContent="flex-end">
+          <ToggleButton size="small" isPressed={colorMode == 'light'} onClick={() => handleChangeTheme('light')}>
+            <Icon as={LightMode}></Icon>
+          </ToggleButton>
+          <ToggleButton size="small" isPressed={colorMode == 'dark'} onClick={() => handleChangeTheme('dark')}>
+            <Icon as={DarkMode}></Icon>
+          </ToggleButton>
+        </ButtonGroup>
+
+        <Flex direction='row'>
+          <Heading level={1} flex="1">Hello {user?.username}</Heading>
+          <Button onClick={signOut}>Sign out</Button>
+        </Flex>
+
+        <Heading level={2}>Amplify Todos</Heading>
+
+        <Flex direction="column" gap="10px">
+          <TextField
+            label="Name"
+            errorMessage="This field is required"
+            required={true}
+            value={formState.name}
+            onChange={(event) =>
+              setFormState({ ...formState, name: event.target.value })
+            }
+          />
+          <TextField
+            label="Description"
+            errorMessage="This field is required"
+            required={true}
+            value={formState.description as string}
+            onChange={(event) =>
+              setFormState({ ...formState, description: event.target.value })
+            }
+          />
+          <ButtonGroup justifyContent="flex-end">
+            <Button variation="primary" onClick={addTodo}>
+              Create Todo
+            </Button>
+          </ButtonGroup>
+        </Flex>
+
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Descriptoin</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {todos.map((todo, index) => (
+              <TableRow key={todo.id ? todo.id : index}>
+                <TableCell>{todo.name}</TableCell>
+                <TableCell>{todo.description}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Flex>
+    </ThemeProvider>
   );
 };
 
-const styles = {
-  container: {
-    width: 400,
-    margin: "0 auto",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    padding: 20,
+const style = {
+  view: {
+    height: '100vh',
+    padding: '10px',
   },
-  todo: { marginBottom: 15 },
-  input: {
-    border: "none",
-    backgroundColor: "#ddd",
-    marginBottom: 10,
-    padding: 8,
-    fontSize: 18,
-  },
-  todoName: { fontSize: 20, fontWeight: "bold" },
-  todoDescription: { marginBottom: 0 },
-  button: {
-    backgroundColor: "black",
-    color: "white",
-    outline: "none",
-    fontSize: 18,
-    padding: "12px 0px",
-  },
-} as const;
-
+}
 export default withAuthenticator(App);
