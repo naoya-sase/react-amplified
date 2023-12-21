@@ -129,7 +129,7 @@ const App: React.FC<AppProps> = ({ signOut, user }) => {
 
 const style = {
   view: {
-    height: '100vh',
+    minHeight: '100vh',
     padding: '10px',
   },
 }
