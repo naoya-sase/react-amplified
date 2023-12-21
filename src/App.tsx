@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 
 import { generateClient } from 'aws-amplify/api';
 
+import { Button, Heading, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
+import { AuthUser } from 'aws-amplify/auth';
+import '@aws-amplify/ui-react/styles.css';
+
 import { createTodo } from './graphql/mutations';
 import { listTodos } from './graphql/queries';
 import { type CreateTodoInput, type Todo } from './API';
@@ -9,7 +13,12 @@ import { type CreateTodoInput, type Todo } from './API';
 const initialState: CreateTodoInput = { name: '', description: '' };
 const client = generateClient();
 
-const App = () => {
+type AppProps = {
+  signOut?: UseAuthenticator["signOut"]; //() => void;
+  user?: AuthUser;
+};
+
+const App: React.FC<AppProps> = ({ signOut, user }) => {
   const [formState, setFormState] = useState<CreateTodoInput>(initialState);
   const [todos, setTodos] = useState<Todo[] | CreateTodoInput[]>([]);
 
@@ -48,6 +57,8 @@ const App = () => {
 
   return (
     <div style={styles.container}>
+      <Heading level={1}>Hello {user?.username}</Heading>
+      <Button onClick={signOut}>Sign out</Button>
       <h2>Amplify Todos</h2>
       <input
         onChange={(event) =>
@@ -106,4 +117,4 @@ const styles = {
   },
 } as const;
 
-export default App;
+export default withAuthenticator(App);
