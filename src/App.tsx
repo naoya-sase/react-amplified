@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { AuthUser } from 'aws-amplify/auth';
-import { Button, ButtonGroup, ColorMode, Flex, Heading, Icon, Table, TableBody, TableCell, TableHead, TableRow, ThemeProvider, ToggleButton, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
+import { Button, ButtonGroup, ColorMode, Flex, Heading, Icon, Table, TableBody, TableCell, TableHead, TableRow, ThemeProvider as AThemeProvider, ToggleButton, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
+import { ThemeProvider as MUIThemeProvider } from '@mui/material';
 
 import { listTodos } from './graphql/queries';
 import { onCreateTodo, onDeleteTodo, onUpdateTodo } from './graphql/subscriptions';
@@ -11,7 +12,7 @@ import TodoCreateDialog from './todo/TodoCreateDialog';
 import TodoUpdateDialog from './todo/TodoUpdateDialog';
 import TodoDeleteDialog from './todo/TodoDeleteDialog';
 
-import theme from './theme';
+import theme, { muiDarkTheme, muiLightTheme } from './theme';
 import './App.css';
 
 const client = generateClient();
@@ -23,6 +24,7 @@ type AppProps = {
 
 const App: React.FC<AppProps> = ({ signOut, user }) => {
   const [colorMode, setColorMode] = useState<ColorMode>('dark');
+  const [muiTheme, setMuiTheme] = useState(muiDarkTheme);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [selectedTodo, setSelectedTodo] = useState<Todo>();
   const [todoCreateDialogOpen, setTodoCreateDialogOpen] = useState(false);
@@ -79,6 +81,11 @@ const App: React.FC<AppProps> = ({ signOut, user }) => {
   /** テーマを切り替える */
   function handleChangeTheme(mode: ColorMode) {
     setColorMode(mode);
+    if (mode === 'dark') {
+      setMuiTheme(muiDarkTheme);
+    } else {
+      setMuiTheme(muiLightTheme);
+    }
   }
 
   /** Todo追加ダイアログを開く */
@@ -114,55 +121,57 @@ const App: React.FC<AppProps> = ({ signOut, user }) => {
   }
 
   return (
-    <ThemeProvider theme={theme} colorMode={colorMode}>
-      <Flex direction='column' gap="20px" style={style.view}>
-        <ButtonGroup justifyContent="flex-end">
-          <ToggleButton size="small" isPressed={colorMode == 'light'} onClick={() => handleChangeTheme('light')}>
-            <Icon as={LightMode}></Icon>
-          </ToggleButton>
-          <ToggleButton size="small" isPressed={colorMode == 'dark'} onClick={() => handleChangeTheme('dark')}>
-            <Icon as={DarkMode}></Icon>
-          </ToggleButton>
-        </ButtonGroup>
+    <MUIThemeProvider theme={muiTheme}>
+      <AThemeProvider theme={theme} colorMode={colorMode}>
+        <Flex direction='column' gap="20px" style={style.view}>
+          <ButtonGroup justifyContent="flex-end">
+            <ToggleButton size="small" isPressed={colorMode == 'light'} onClick={() => handleChangeTheme('light')}>
+              <Icon as={LightMode}></Icon>
+            </ToggleButton>
+            <ToggleButton size="small" isPressed={colorMode == 'dark'} onClick={() => handleChangeTheme('dark')}>
+              <Icon as={DarkMode}></Icon>
+            </ToggleButton>
+          </ButtonGroup>
 
-        <Flex direction='row'>
-          <Heading level={1} flex="1">Hello {user?.username}</Heading>
-          <Button onClick={signOut}>Sign out</Button>
+          <Flex direction='row'>
+            <Heading level={1} flex="1">Hello {user?.username}</Heading>
+            <Button onClick={signOut}>Sign out</Button>
+          </Flex>
+
+          <Heading level={2}>Amplify Todos</Heading>
+
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Descriptoin</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {todos.map((todo, index) => (
+                <TableRow key={todo.id ? todo.id : index}>
+                  <TableCell>{todo.name}</TableCell>
+                  <TableCell>{todo.description}</TableCell>
+                  <TableCell style={style.todoButtons}>
+                    <ButtonGroup>
+                      <Button size="small" onClick={() => handleUpdateTodoDialogOpen(todo)}><Icon as={Edit}></Icon></Button>
+                      <Button size="small" onClick={() => handleDeleteTodoDialogOpen(todo)}><Icon as={Delete}></Icon></Button>
+                    </ButtonGroup>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <Button variation="primary" onClick={handleCreateTodoDialogOpen}>Create Todo</Button>
         </Flex>
 
-        <Heading level={2}>Amplify Todos</Heading>
-
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Descriptoin</TableCell>
-              <TableCell></TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {todos.map((todo, index) => (
-              <TableRow key={todo.id ? todo.id : index}>
-                <TableCell>{todo.name}</TableCell>
-                <TableCell>{todo.description}</TableCell>
-                <TableCell style={style.todoButtons}>
-                  <ButtonGroup>
-                    <Button size="small" onClick={() => handleUpdateTodoDialogOpen(todo)}><Icon as={Edit}></Icon></Button>
-                    <Button size="small" onClick={() => handleDeleteTodoDialogOpen(todo)}><Icon as={Delete}></Icon></Button>
-                  </ButtonGroup>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        <Button variation="primary" onClick={handleCreateTodoDialogOpen}>Create Todo</Button>
-      </Flex>
-
-      <TodoCreateDialog open={todoCreateDialogOpen} onClose={handleCreateTodoDialogClose}></TodoCreateDialog>
-      <TodoUpdateDialog open={todoUpdateDialogOpen} onClose={handleUpdateTodoDialogClose} todo={selectedTodo}></TodoUpdateDialog>
-      <TodoDeleteDialog open={todoDeleteDialogOpen} onClose={handleDeleteTodoDialogClose} todo={selectedTodo}></TodoDeleteDialog>
-    </ThemeProvider>
+        <TodoCreateDialog open={todoCreateDialogOpen} onClose={handleCreateTodoDialogClose}></TodoCreateDialog>
+        <TodoUpdateDialog open={todoUpdateDialogOpen} onClose={handleUpdateTodoDialogClose} todo={selectedTodo}></TodoUpdateDialog>
+        <TodoDeleteDialog open={todoDeleteDialogOpen} onClose={handleDeleteTodoDialogClose} todo={selectedTodo}></TodoDeleteDialog>
+      </AThemeProvider>
+    </MUIThemeProvider>
   );
 };
 
