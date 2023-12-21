@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { AuthUser } from 'aws-amplify/auth';
-import { Button, ButtonGroup, ColorMode, Flex, Heading, Icon, Table, TableBody, TableCell, TableHead, TableRow, TextField, ThemeProvider, ToggleButton, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
+import { Button, ButtonGroup, ColorMode, Flex, Heading, Icon, Table, TableBody, TableCell, TableHead, TableRow, ThemeProvider as AThemeProvider, ToggleButton, UseAuthenticator, withAuthenticator } from '@aws-amplify/ui-react';
+import { ThemeProvider as MUIThemeProvider } from '@mui/material';
 
-import { createTodo } from './graphql/mutations';
 import { listTodos } from './graphql/queries';
-import { type CreateTodoInput, type Todo } from './API';
-import theme from './theme';
-import { DarkMode, LightMode } from '@mui/icons-material';
+import { onCreateTodo, onDeleteTodo, onUpdateTodo } from './graphql/subscriptions';
+import { Todo } from './API';
+import { DarkMode, Delete, Edit, LightMode } from '@mui/icons-material';
+import TodoCreateDialog from './todo/TodoCreateDialog';
+import TodoUpdateDialog from './todo/TodoUpdateDialog';
+import TodoDeleteDialog from './todo/TodoDeleteDialog';
+
+import theme, { muiDarkTheme, muiLightTheme } from './theme';
 import './App.css';
 
-const initialState: CreateTodoInput = { name: '', description: '' };
 const client = generateClient();
 
 type AppProps = {
@@ -20,8 +24,12 @@ type AppProps = {
 
 const App: React.FC<AppProps> = ({ signOut, user }) => {
   const [colorMode, setColorMode] = useState<ColorMode>('dark');
-  const [formState, setFormState] = useState<CreateTodoInput>(initialState);
-  const [todos, setTodos] = useState<Todo[] | CreateTodoInput[]>([]);
+  const [muiTheme, setMuiTheme] = useState(muiDarkTheme);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [selectedTodo, setSelectedTodo] = useState<Todo>();
+  const [todoCreateDialogOpen, setTodoCreateDialogOpen] = useState(false);
+  const [todoUpdateDialogOpen, setTodoUpdateDialogOpen] = useState(false);
+  const [todoDeleteDialogOpen, setTodoDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchTodos();
@@ -39,91 +47,131 @@ const App: React.FC<AppProps> = ({ signOut, user }) => {
     }
   }
 
-  async function addTodo() {
-    try {
-      if (!formState.name || !formState.description) return;
-      const todo = { ...formState };
-      setTodos([...todos, todo]);
-      setFormState(initialState);
-      await client.graphql({
-        query: createTodo,
-        variables: {
-          input: todo,
-        },
-      });
-    } catch (err) {
-      console.log('error creating todo:', err);
-    }
-  }
+  /** Todoが新規追加された場合、追加されたTodoをリストに追加する */
+  useEffect(() => {
+    const subscription = client.graphql({query: onCreateTodo}).subscribe({
+      next: (message) => {
+        setTodos(todos => [...todos, message.data.onCreateTodo]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  /** Todoが更新された場合、更新内容をリストに反映する */
+  useEffect(() => {
+    const subscription = client.graphql({query: onUpdateTodo}).subscribe(
+      message => {
+        const updatedTodo = message.data.onUpdateTodo;
+        setTodos(todos => todos.map(value => value.id === updatedTodo.id ? updatedTodo : value));
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, []);
+
+  /** Todoが削除された場合、削除されたTodoをリストから削除する */
+  useEffect(() => {
+    const subscription = client.graphql({query: onDeleteTodo}).subscribe(
+      message => {
+        setTodos(todos => todos.filter(value => value.id !== message.data.onDeleteTodo.id));
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, []);
 
   /** テーマを切り替える */
   function handleChangeTheme(mode: ColorMode) {
     setColorMode(mode);
+    if (mode === 'dark') {
+      setMuiTheme(muiDarkTheme);
+    } else {
+      setMuiTheme(muiLightTheme);
+    }
+  }
+
+  /** Todo追加ダイアログを開く */
+  function handleCreateTodoDialogOpen() {
+    setTodoCreateDialogOpen(true);
+  }
+
+  /** Todo追加ダイアログを閉じる */
+  function handleCreateTodoDialogClose() {
+    setTodoCreateDialogOpen(false);
+  }
+
+  /** Todo更新ダイアログを開く */
+  function handleUpdateTodoDialogOpen(todo: Todo) {
+    setSelectedTodo(todo);
+    setTodoUpdateDialogOpen(true);
+  }
+
+  /** Todo更新ダイアログを閉じる */
+  function handleUpdateTodoDialogClose() {
+    setTodoUpdateDialogOpen(false);
+  }
+
+  /** Todo削除ダイアログを開く */
+  function handleDeleteTodoDialogOpen(todo: Todo) {
+    setSelectedTodo(todo);
+    setTodoDeleteDialogOpen(true);
+  }
+
+  /** Todo削除ダイアログを閉じる */
+  function handleDeleteTodoDialogClose() {
+    setTodoDeleteDialogOpen(false);
   }
 
   return (
-    <ThemeProvider theme={theme} colorMode={colorMode}>
-      <Flex direction='column' gap="20px" style={style.view}>
-        <ButtonGroup justifyContent="flex-end">
-          <ToggleButton size="small" isPressed={colorMode == 'light'} onClick={() => handleChangeTheme('light')}>
-            <Icon as={LightMode}></Icon>
-          </ToggleButton>
-          <ToggleButton size="small" isPressed={colorMode == 'dark'} onClick={() => handleChangeTheme('dark')}>
-            <Icon as={DarkMode}></Icon>
-          </ToggleButton>
-        </ButtonGroup>
-
-        <Flex direction='row'>
-          <Heading level={1} flex="1">Hello {user?.username}</Heading>
-          <Button onClick={signOut}>Sign out</Button>
-        </Flex>
-
-        <Heading level={2}>Amplify Todos</Heading>
-
-        <Flex direction="column" gap="10px">
-          <TextField
-            label="Name"
-            errorMessage="This field is required"
-            required={true}
-            value={formState.name}
-            onChange={(event) =>
-              setFormState({ ...formState, name: event.target.value })
-            }
-          />
-          <TextField
-            label="Description"
-            errorMessage="This field is required"
-            required={true}
-            value={formState.description as string}
-            onChange={(event) =>
-              setFormState({ ...formState, description: event.target.value })
-            }
-          />
+    <MUIThemeProvider theme={muiTheme}>
+      <AThemeProvider theme={theme} colorMode={colorMode}>
+        <Flex direction='column' gap="20px" style={style.view}>
           <ButtonGroup justifyContent="flex-end">
-            <Button variation="primary" onClick={addTodo}>
-              Create Todo
-            </Button>
+            <ToggleButton size="small" isPressed={colorMode == 'light'} onClick={() => handleChangeTheme('light')}>
+              <Icon as={LightMode}></Icon>
+            </ToggleButton>
+            <ToggleButton size="small" isPressed={colorMode == 'dark'} onClick={() => handleChangeTheme('dark')}>
+              <Icon as={DarkMode}></Icon>
+            </ToggleButton>
           </ButtonGroup>
+
+          <Flex direction='row'>
+            <Heading level={1} flex="1">Hello {user?.username}</Heading>
+            <Button onClick={signOut}>Sign out</Button>
+          </Flex>
+
+          <Heading level={2}>Amplify Todos</Heading>
+
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Descriptoin</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {todos.map((todo, index) => (
+                <TableRow key={todo.id ? todo.id : index}>
+                  <TableCell>{todo.name}</TableCell>
+                  <TableCell>{todo.description}</TableCell>
+                  <TableCell style={style.todoButtons}>
+                    <ButtonGroup>
+                      <Button size="small" onClick={() => handleUpdateTodoDialogOpen(todo)}><Icon as={Edit}></Icon></Button>
+                      <Button size="small" onClick={() => handleDeleteTodoDialogOpen(todo)}><Icon as={Delete}></Icon></Button>
+                    </ButtonGroup>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <Button variation="primary" onClick={handleCreateTodoDialogOpen}>Create Todo</Button>
         </Flex>
 
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Descriptoin</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {todos.map((todo, index) => (
-              <TableRow key={todo.id ? todo.id : index}>
-                <TableCell>{todo.name}</TableCell>
-                <TableCell>{todo.description}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Flex>
-    </ThemeProvider>
+        <TodoCreateDialog open={todoCreateDialogOpen} onClose={handleCreateTodoDialogClose}></TodoCreateDialog>
+        <TodoUpdateDialog open={todoUpdateDialogOpen} onClose={handleUpdateTodoDialogClose} todo={selectedTodo}></TodoUpdateDialog>
+        <TodoDeleteDialog open={todoDeleteDialogOpen} onClose={handleDeleteTodoDialogClose} todo={selectedTodo}></TodoDeleteDialog>
+      </AThemeProvider>
+    </MUIThemeProvider>
   );
 };
 
@@ -132,5 +180,8 @@ const style = {
     minHeight: '100vh',
     padding: '10px',
   },
+  todoButtons: {
+    width: '10rem',
+  }
 }
 export default withAuthenticator(App);
